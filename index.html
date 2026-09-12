@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>스도쿠</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  :root {
+    --paper: #f2ede2;
+    --paper-raised: #faf7f0;
+    --ink: #232324;
+    --ink-soft: #55524a;
+    --line: #cdc4ae;
+    --line-strong: #232324;
+    --accent: #8a3b2e;
+    --accent-soft: #d9c9a8;
+    --given: #232324;
+    --entered: #2f5f7a;
+    --error: #a4342a;
+    --error-bg: #f3d9d3;
+    --highlight: #e7dcc0;
+    --highlight-strong: #d9c185;
+    --focus-ring: #8a3b2e;
+  }
+
+  [data-theme="dark"] {
+    --paper: #1c1b19;
+    --paper-raised: #242220;
+    --ink: #ece7dc;
+    --ink-soft: #a89f8e;
+    --line: #47443c;
+    --line-strong: #ece7dc;
+    --accent: #d97757;
+    --accent-soft: #4a372c;
+    --given: #ece7dc;
+    --entered: #7fb3cc;
+    --error: #e2685a;
+    --error-bg: #40231f;
+    --highlight: #33312b;
+    --highlight-strong: #4a4636;
+    --focus-ring: #d97757;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--paper);
+    background-image:
+      radial-gradient(ellipse at top left, rgba(138,59,46,0.05), transparent 55%),
+      radial-gradient(ellipse at bottom right, rgba(35,35,36,0.04), transparent 55%);
+    font-family: 'Spectral', serif;
+    color: var(--ink);
+    display: flex;
+    justify-content: center;
+    padding: 32px 20px 60px;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 1040px;
+  }
+
+  header.top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  h1 {
+    font-family: 'Spectral', serif;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: 0.01em;
+    margin: 0;
+  }
+
+  h1 .dot { color: var(--accent); }
+
+  .meta-row {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+  }
+
+  .timer {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  main.layout {
+    display: grid;
+    grid-template-columns: minmax(0, 560px) 300px;
+    gap: 32px;
+    align-items: start;
+  }
+
+  @media (max-width: 900px) {
+    main.layout { grid-template-columns: 1fr; }
+  }
+
+  /* ---------- Board ---------- */
+  .board-wrap {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 20px;
+    box-shadow: 0 1px 0 rgba(35,35,36,0.03);
+  }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    grid-template-rows: repeat(9, 1fr);
+    aspect-ratio: 1;
+    width: 100%;
+    background: var(--line-strong);
+    border: 2px solid var(--line-strong);
+    user-select: none;
+    touch-action: none;
+  }
+
+  .cell {
+    position: relative;
+    background: var(--paper-raised);
+    border: 0.5px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(1.1rem, 3.4vw, 1.65rem);
+    font-weight: 500;
+    cursor: pointer;
+    line-height: 1;
+  }
+
+  /* thick box borders */
+  .cell[data-col="0"] { border-left: 2px solid var(--line-strong); }
+  .cell[data-col="2"], .cell[data-col="5"] { border-right: 2px solid var(--line-strong); }
+  .cell[data-col="8"] { border-right: 2px solid var(--line-strong); }
+  .cell[data-row="0"] { border-top: 2px solid var(--line-strong); }
+  .cell[data-row="2"], .cell[data-row="5"] { border-bottom: 2px solid var(--line-strong); }
+  .cell[data-row="8"] { border-bottom: 2px solid var(--line-strong); }
+
+  .cell.given { color: var(--given); font-weight: 700; }
+  .cell.entered { color: var(--entered); }
+  .cell.error { color: var(--error); background: var(--error-bg); }
+
+  .cell.peer { background: var(--highlight); }
+  .cell.same-num { background: var(--highlight-strong); }
+  .cell.note-match { box-shadow: inset 0 0 0 2px var(--line-strong); }
+  .notes-grid span.note-selected { color: var(--entered); font-weight: 700; }
+  .cell.selected { background: var(--accent-soft); outline: 2px solid var(--accent); outline-offset: -2px; z-index: 2; }
+  .cell.given.selected { background: var(--accent-soft); }
+
+  .cell:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+
+  .notes-grid {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    padding: 2px;
+  }
+  .notes-grid span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(0.55rem, 1.5vw, 0.72rem);
+    color: var(--ink-soft);
+    font-weight: 600;
+  }
+  .notes-grid span.note-error { color: var(--error) !important; font-weight: 700; }
+
+  /* ---------- Controls panel ---------- */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 16px;
+  }
+
+  .card h2 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--ink-soft);
+    margin: 0 0 12px;
+    text-transform: lowercase;
+  }
+
+  /* number pad */
+  .numpad {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+  }
+  .num-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 600;
+    padding: 10px 0;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--ink);
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .num-btn:hover { border-color: var(--ink-soft); }
+  .num-btn.active {
+    background: var(--accent);
+    color: var(--paper-raised);
+    border-color: var(--accent);
+  }
+  .num-btn.exhausted { opacity: 0.3; }
+
+  .tool-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .tool-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 10px 6px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .tool-btn:hover { border-color: var(--ink-soft); }
+  .tool-btn.active {
+    background: var(--ink);
+    color: var(--paper-raised);
+    border-color: var(--ink);
+  }
+  .tool-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .key {
+    font-size: 0.68rem;
+    color: var(--ink-soft);
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 0 4px;
+  }
+  .tool-btn.active .key { color: var(--paper-raised); border-color: rgba(255,255,255,0.3); background: transparent; }
+
+  /* toggle switches for settings */
+  .setting-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .setting-label {
+    font-size: 0.86rem;
+    font-weight: 600;
+  }
+  .setting-desc {
+    font-size: 0.74rem;
+    color: var(--ink-soft);
+    line-height: 1.4;
+    max-width: 210px;
+  }
+
+  .switch {
+    position: relative;
+    width: 38px;
+    height: 21px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch-track {
+    position: absolute;
+    inset: 0;
+    background: var(--line);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .switch-track::before {
+    content: '';
+    position: absolute;
+    width: 15px;
+    height: 15px;
+    left: 3px;
+    top: 3px;
+    background: var(--paper-raised);
+    border-radius: 50%;
+    transition: transform 0.15s;
+  }
+  .switch input:checked + .switch-track { background: var(--accent); }
+  .switch input:checked + .switch-track::before { transform: translateX(17px); }
+  .switch input:focus-visible + .switch-track { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+  /* difficulty select */
+  .diff-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .diff-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 8px 2px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--ink-soft);
+  }
+  .diff-btn.active { background: var(--ink); color: var(--paper-raised); border-color: var(--ink); }
+
+  .primary-btn {
+    width: 100%;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 11px 0;
+    background: var(--ink);
+    color: var(--paper-raised);
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+  .primary-btn:hover { background: var(--accent); }
+
+  .status-banner {
+    display: none;
+    background: var(--accent);
+    color: var(--paper-raised);
+    text-align: center;
+    padding: 10px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+  }
+  .status-banner.show { display: block; }
+
+  footer.hint {
+    margin-top: 20px;
+    font-size: 0.76rem;
+    color: var(--ink-soft);
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.6;
+  }
+  footer.hint b { color: var(--ink); }
+
+  ::selection { background: var(--accent-soft); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>스도쿠<span class="dot">.</span></h1>
+    <div class="meta-row">
+      <span id="diffLabel">보통</span>
+      <span id="mistakes">실수 0</span>
+      <span class="timer" id="timer">00:00</span>
+    </div>
+  </header>
+
+  <div class="status-banner" id="statusBanner">완료! 축하합니다.</div>
+
+  <main class="layout">
+    <div class="board-wrap">
+      <div class="board" id="board" role="grid" aria-label="9x9 스도쿠 판"></div>
+    </div>
+
+    <div class="panel">
+      <div class="card">
+        <h2>숫자</h2>
+        <div class="numpad" id="numpad"></div>
+        <div class="tool-row">
+          <button class="tool-btn" id="btnNote" data-tool="note">
+            메모 <span class="key">N</span>
+          </button>
+          <button class="tool-btn" id="btnErase" data-tool="erase">
+            지우개 <span class="key">Del</span>
+          </button>
+        </div>
+        <div class="tool-row" style="margin-top:6px;">
+          <button class="tool-btn" id="btnUndo">
+            실행취소 <span class="key">⌘Z</span>
+          </button>
+          <button class="tool-btn" id="btnRedo">
+            다시실행 <span class="key">⌘Y</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>난이도 · 새 게임</h2>
+        <div class="diff-row" id="diffRow">
+          <button class="diff-btn" data-diff="easy">쉬움</button>
+          <button class="diff-btn active" data-diff="medium">보통</button>
+          <button class="diff-btn" data-diff="hard">어려움</button>
+          <button class="diff-btn" data-diff="expert">전문가</button>
+        </div>
+        <button class="primary-btn" id="btnNewGame">새 퍼즐 생성</button>
+      </div>
+
+      <div class="card">
+        <h2>설정</h2>
+
+        <div class="setting-row">
+          <div class="setting-text">
+            <span class="setting-label">다크 모드</span>
+            <span class="setting-desc">어두운 테마로 전환합니다.</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggleDarkMode" />
+            <span class="switch-track"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-text">
+            <span class="setting-label">숫자 우선 입력</span>
+            <span class="setting-desc">숫자·지우개를 먼저 고르고 판을 눌러 적용합니다.</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggleNumberFirst" />
+            <span class="switch-track"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-text">
+            <span class="setting-label">채워진 칸 클릭 시 자동 선택</span>
+            <span class="setting-desc">입력된 숫자를 누르면 그 숫자가 선택됩니다.</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggleClickSelect" checked />
+            <span class="switch-track"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-text">
+            <span class="setting-label">드래그 입력</span>
+            <span class="setting-desc">클릭을 유지한 채 지나가는 칸마다 적용됩니다.</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggleDrag" checked />
+            <span class="switch-track"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-text">
+            <span class="setting-label">오류 표시</span>
+            <span class="setting-desc">중복되는 숫자를 붉은색으로 표시합니다.</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggleErrors" checked />
+            <span class="switch-track"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-text">
+            <span class="setting-label">같은 숫자 강조</span>
+            <span class="setting-desc">선택한 칸과 같은 숫자를 강조 표시합니다.</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggleSameNum" checked />
+            <span class="switch-track"></span>
+          </label>
+        </div>
+      </div>
+
+      <footer class="hint">
+        방향키 이동 · <b>숫자</b> 확정 입력 · <b>Shift+숫자</b> 메모 토글 · <b>Del</b> 지우기 · <b>⌘/Ctrl+Z</b> 실행취소
+      </footer>
+    </div>
+  </main>
+</div>
+
+<script src="sudoku-engine-browser.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
